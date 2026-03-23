@@ -1,0 +1,18 @@
+# Ignore MATLAB auto-save files to prevent version control clutter
+*.asv
+*.m~
+
+# Ignore compiled MEX function binaries as they are specific to your operating system
+*.mex*
+*.mexa64
+*.mexw64
+*.mexmac
+*.mexmaci64
+
+# Ignore Simulink code generation and cache folders
+slprj/
+*.slxc
+
+# Ignore MATLAB crash logs and system state records
+matlab_crash_dump.*
+*.mat
