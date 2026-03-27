@@ -1,6 +1,5 @@
 function [T] = CalculationDHMatrix(theta, d, a, alpha)
-% This function calculates the 4x4 homogeneous transformation matrix
-% using the four standard Denavit-Hartenberg parameters.
+% This function calculates the 4x4 homogeneous transformation matrix using the four standard Denavit-Hartenberg parameters.
 
 T_row1 = [cos(theta), -sin(theta)*cos(alpha), sin(theta)*sin(alpha), a*cos(theta)];
 T_row2 = [sin(theta), cos(theta)*cos(alpha), -cos(theta)*sin(alpha), a*sin(theta)];
