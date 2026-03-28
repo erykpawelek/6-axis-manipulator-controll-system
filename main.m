@@ -27,7 +27,7 @@ T0e_num = double(subs(T0e, {theta1, theta2, theta3, theta4, theta5, theta6, d1, 
 display('Numerical representation of transformation matrix T0e_num for given joint variables:'); disp(T0e_num);
 
 %% Inverse kinematics 
-
+solutions = []
 % 1 Step of kinematic decoupling method
 P = T0e(1:3,4);
 Pw = T0e(1:3,3) * d6;
@@ -62,5 +62,14 @@ for i = 1:rows
     R03 = CalculateRotationFrom0To3(validated_three_first_joint_var(i, 1), validated_three_first_joint_var(i, 2), validated_three_first_joint_var(i, 3), d1n, a2n);
     R3e = transpose(R03) * R0e;
 
-    three_lats_joint_variables(i) = CalculateThreeLastJointVariables(R3e) 
+    three_last_joint_variables = CalculateThreeLastJointVariables(R3e);
+    validated_three_last_joint_variables = ValidateThreeLastJointVariables(three_last_joint_variables)
+
+    if ~isempty(validated_three_last_joint_variables)
+        solutions(end+1,:) = [validated_three_first_joint_var(i,:), validated_three_last_joint_variables(1,:)];
+        solutions(end+1,:) = [validated_three_first_joint_var(i,:), validated_three_last_joint_variables(2,:)];
+    end
 end
+solutions
+display('Joint variables of robots tested configuration:')
+disp(joint_values);
