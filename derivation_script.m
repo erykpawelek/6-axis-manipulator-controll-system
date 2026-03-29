@@ -1,3 +1,4 @@
+% This script is for equation derivation and building algorithm.
 %% Manipulator parameters determination
 clc
 clear all
@@ -50,14 +51,14 @@ three_first_joint_var = CalculateThreeFirstJointVariables(Pan, d1n, a2n, d4n)
 validated_three_first_joint_var = ValidateThreeFirstJointVariables(three_first_joint_var)
 
 % Calculation of last 3 joint variables;
-
 [rows, columns] = size(validated_three_first_joint_var);
 
+% Obtaining matrixes for calculations
 T3e = CalculateTranformFrom3ToESymbolic()
 R3e = T3e(1:3, 1:3)
 R0e = testpose(1:3,1:3);
 
-
+% Solving three last joints with merging all solutions into one table 
 for i = 1:rows
     R03 = CalculateRotationFrom0To3(validated_three_first_joint_var(i, 1), validated_three_first_joint_var(i, 2), validated_three_first_joint_var(i, 3), d1n, a2n);
     R3e = transpose(R03) * R0e;
@@ -71,5 +72,6 @@ for i = 1:rows
     end
 end
 solutions
+solutions1 = CalculateInverseKinematics(d1n, a2n, d4n, d6n, testpose)
 display('Joint variables of robots tested configuration:')
 disp(joint_values);
