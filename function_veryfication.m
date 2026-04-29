@@ -15,3 +15,6 @@ T0e = CalculateForwardKinematics(d1n, a2n, d4n, d6n, joint_values);
 display('Homogenous Transform matrix calculated by designed function T0e:');disp(T0e);
 solutions = CalculateInverseKinematics(d1n, a2n, d4n, d6n, testpose);
 display('Solutions of inverse kinematics calculated by designed function:');disp(solutions);
+%%
+% Calculation of analitical dynamic model:
+EulerLagrangeThreeLinkSym()
