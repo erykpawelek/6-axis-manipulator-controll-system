@@ -1,144 +1,220 @@
-function [trajectory] = TrajectorySolver(points, config, max_vel, max_accel, plot)
-% Function returns trajectory with specyfied maximum
-%acceleration and velocity
+function [poly_coeffs, segment_times, joint_wps_simscape, global_time, pos_eval_simscape, velocities, accelerations] = TrajectorySolver(points, config, max_vel, max_accel, plot_flag, d1, a2, d4, d6)
+% TrajectorySolver: Optimized quintic polynomial path planner mapped to Simscape 0-state.
 
-% Determine the total number of waypoints
-num_points = size(points, 1);
-% Pre-allocate the output matrix for 3 joint angles (N rows x 3 columns)
-joint_waypoints = zeros(num_points, 3); 
+    % --- CORE SETTINGS ---
+    time_resolution = 0.02; % Global evaluation fine time step (seconds) for plots
 
-for i = 1 : num_points
-    % Extract the full row correctly using the (row, column) format
-    current_point = points(i, :);
+    % --- 1. Map Mathematics to Simscape Zero-State ---
+    % We assume the first waypoint (points(1,:)) is the robot's home position.
+    % We calculate its absolute mathematical angles to use as a subtraction offset.
+    home_pt = points(1, :);
+    home_rot_mat = eul2rotm(home_pt(4:6));
+    home_ht = eye(4); 
+    home_ht(1:3, 1:3) = home_rot_mat;
+    home_ht(1:3, 4) = transpose(home_pt(1:3));
     
-    % Separate Translation (columns 1-3) and Rotation (columns 4-6)
-    XYZ_vector = current_point(1:3);
-    RPY_euler = current_point(4:6); 
+    all_home_configs = CalculateInverseKinematics(d1, a2, d4, d6, home_ht);
     
-    % Convert Euler angles to a 3x3 Rotation Matrix
-    rot_mat = eul2rotm(RPY_euler);
+    % Safe config selection
+    num_sol_start = size(all_home_configs, 1);
+    if num_sol_start == 0
+        error('Workspace Error: The starting Home position is outside the reachable workspace.');
+    end
+    config_to_use = min(config, num_sol_start);
     
-    % Assemble the 4x4 Homogeneous Transformation Matrix
-    ht_matrix = eye(4); 
-    ht_matrix(1:3, 1:3) = rot_mat;       % Insert 3x3 rotation
-    ht_matrix(1:3, 4) = transpose(XYZ_vector); % Insert 3x1 translation into 4th column
-    
-    % Calculate ALL joint angles (outputs an 8x6 matrix)
-    all_q_targets = InverseKinematics(ht_matrix); 
-    q_target = all_q_targets(config, :);
-    
-    % Store the calculated joint angles in our pre-allocated array
-    joint_waypoints(i, :) = q_target; 
-end
+    % This is the constant difference between the Math frame and the Simscape frame
+    simscape_offset_vector = all_home_configs(config_to_use, :);
 
-% Calculating times between points
-t = zeros(1, num_points - 1);
-for i = 2 : num_points
-        
-    % Finding maximal radial displacement
-     joint_diff = joint_waypoints(i, :) - joint_waypoints(i-1, :);
-     maximal_displacement = max(abs(joint_diff));
-     
-     % Calculating minimal time based on derivatives of 5th order polynomials
-     t_v = 1.875 * (maximal_displacement/max_vel);
-     t_a = sqrt(5.77 * maximal_displacement/max_accel);
-
-     if t_v > t_a
-         t(i-1) = t_v;
-     else
-         t(i-1) = t_a;
-     end
-end
-
-% Calculate the number of segments
-num_segments = num_points - 1;
-
-% Each segment has a 5th-order polynomial with 6 coefficients (a0 to a5)
-% Total number of unknown variables for one joint
-num_coeffs = 6 * num_segments; 
-
-% Pre-allocate a 3D matrix to store the final coefficients
-% Dimensions: [Rows = Segments, Columns = 6 Coefficients, Depth = 6 Joints]
-polynomial_coeffs = zeros(num_segments, 6, 6);
-
-for joint_idx = 1 : 6
-    % 1. Initialize the global A matrix and B vector for this specific joint
-    A = zeros(num_coeffs, num_coeffs);
-    B = zeros(num_coeffs, 1);
+    % --- 2. Calculate Mapped Inverse Kinematics ---
+    num_points = size(points, 1);
+    joint_wps_simscape = zeros(num_points, 6); 
     
-    % We use a row counter to keep track of which equation we are adding to the matrix
-    row = 1; 
-    
-    % --- Start Point Boundary Conditions (Applies only to Segment 1 at t = 0) ---
-    % Equation 1: Start Position (a0 = initial angle)
-    A(row, 1) = 1; 
-    B(row, 1) = joint_waypoints(1, joint_idx);
-    row = row + 1;
-    % Equation 2: Start Velocity (a1 = 0)
-    A(row, 2) = 1;
-    B(row, 1) = 0;
-    row = row + 1; 
-    % Equation 3: Start Acceleration (2*a2 = 0)
-    A(row, 3) = 2;
-    B(row, 1) = 0;
-    row = row + 1;
-    
-    % --- [Placeholder for Continuity Equations and End Point Equations] ---
-   for seg = 1 : (num_segments - 1)
-        % T is the total time duration for the CURRENT segment
-        T = t(seg); 
+    for i = 1 : num_points
+        current_point = points(i, :);
+        rot_mat = eul2rotm(current_point(4:6));
+        ht_matrix = eye(4); 
+        ht_matrix(1:3, 1:3) = rot_mat;
+        ht_matrix(1:3, 4) = transpose(current_point(1:3));
         
-        % Calculate the base column index for current and next segment
-        c1 = (seg - 1) * 6; % Columns for Segment A (ends at via-point)
-        c2 = seg * 6;       % Columns for Segment B (starts at via-point)
+        all_configs = CalculateInverseKinematics(d1, a2, d4, d6, ht_matrix); 
         
-        % The target angle for this specific joint at this via-point
-        target_angle = joint_waypoints(seg + 1, joint_idx);
+        if size(all_configs, 1) == 0
+            error('Workspace Error: Waypoint %d is unreachable.', i);
+        end
         
-        % 1. Position: Segment A ends exactly at the via-point target
-        A(row, c1+1) = 1; A(row, c1+2) = T; A(row, c1+3) = T^2; A(row, c1+4) = T^3; A(row, c1+5) = T^4; A(row, c1+6) = T^5;
-        B(row, 1) = target_angle;
-        row = row + 1;
+        q_target_raw = all_configs(config_to_use, :);
         
-        % 2. Position: Segment B starts exactly at the via-point target (at local t=0)
-        A(row, c2+1) = 1; 
-        B(row, 1) = target_angle;
-        row = row + 1;
-        
-        % 3. Velocity Continuity (End Vel A - Start Vel B = 0)
-        A(row, c1+2) = 1; A(row, c1+3) = 2*T; A(row, c1+4) = 3*T^2; A(row, c1+5) = 4*T^3; A(row, c1+6) = 5*T^4; % End Vel A
-        A(row, c2+2) = -1; % Start Vel B (moved to left side of equation)
-        B(row, 1) = 0;
-        row = row + 1;
-        
-        % 4. Acceleration Continuity (End Accel A - Start Accel B = 0)
-        A(row, c1+3) = 2; A(row, c1+4) = 6*T; A(row, c1+5) = 12*T^2; A(row, c1+6) = 20*T^3;
-        A(row, c2+3) = -2; 
-        B(row, 1) = 0;
-        row = row + 1;
-        
-        % 5. Jerk Continuity (End Jerk A - Start Jerk B = 0)
-        A(row, c1+4) = 6; A(row, c1+5) = 24*T; A(row, c1+6) = 60*T^2;
-        A(row, c2+4) = -6;
-        B(row, 1) = 0;
-        row = row + 1;
-        
-        % 6. Snap Continuity (End Snap A - Start Snap B = 0)
-        A(row, c1+5) = 24; A(row, c1+6) = 120*T;
-        A(row, c2+5) = -24;
-        B(row, 1) = 0;
-        row = row + 1;
+        % Map the raw math angle to the Simscape 0-based angle
+        joint_wps_simscape(i, :) = q_target_raw - simscape_offset_vector; 
     end
 
-
+    % --- 3. Time Allocation ---
+    t_min = zeros(1, num_points - 1);
+    for i = 2 : num_points
+        % Calculate time based on the largest joint movement in this segment
+        maximal_displacement = max(abs(joint_wps_simscape(i, :) - joint_wps_simscape(i-1, :)));
+        t_v = 1.875 * (maximal_displacement/max_vel);
+        t_a = sqrt(5.77 * maximal_displacement/max_accel);
+        t_min(i-1) = max(t_v, t_a);
     end
-    % 2. Solve the linear system A * x = B to find all coefficients for this joint
-    % The backslash operator calculates x
-    x = A \ B;
+    segment_times = t_min;
+    num_segments = num_points - 1;
+    total_time = sum(segment_times);
+
+    % --- 4. Coefficient Solver ---
+    num_coeffs = 6 * num_segments; 
+    poly_coeffs = zeros(num_segments, 6, 6);
     
-    % --- [Placeholder for reshaping x back into the polynomial_coeffs matrix] ---
+    for j = 1 : 6
+        A = zeros(num_coeffs, num_coeffs);
+        B = zeros(num_coeffs, 1);
+        row = 1; 
+        
+        % Start Point (t=0) - Now starting exactly at mapped start
+        A(row, 1) = 1; B(row, 1) = joint_wps_simscape(1, j); row = row + 1;
+        A(row, 2) = 1; B(row, 1) = 0;                        row = row + 1;
+        A(row, 3) = 2; B(row, 1) = 0;                        row = row + 1;
+        
+        % Via Points
+        for seg = 1 : (num_segments - 1)
+            T_cur = segment_times(seg); 
+            c1 = (seg - 1) * 6; c2 = seg * 6;       
+            q_via = joint_wps_simscape(seg + 1, j);
+            
+            % Position Continuity
+            A(row, c1+1) = 1; A(row, c1+2) = T_cur; A(row, c1+3) = T_cur^2; 
+            A(row, c1+4) = T_cur^3; A(row, c1+5) = T_cur^4; A(row, c1+6) = T_cur^5;
+            B(row, 1) = q_via; row = row + 1;
+            
+            A(row, c2+1) = 1; B(row, 1) = q_via; row = row + 1;
+            
+            % Vel, Accel, Jerk, Snap Continuity
+            A(row, c1+2) = 1; A(row, c1+3) = 2*T_cur; A(row, c1+4) = 3*T_cur^2; A(row, c1+5) = 4*T_cur^3; A(row, c1+6) = 5*T_cur^4; 
+            A(row, c2+2) = -1; B(row, 1) = 0; row = row + 1;
+            
+            A(row, c1+3) = 2; A(row, c1+4) = 6*T_cur; A(row, c1+5) = 12*T_cur^2; A(row, c1+6) = 20*T_cur^3;
+            A(row, c2+3) = -2; B(row, 1) = 0; row = row + 1;
+            
+            A(row, c1+4) = 6; A(row, c1+5) = 24*T_cur; A(row, c1+6) = 60*T_cur^2;
+            A(row, c2+4) = -6; B(row, 1) = 0; row = row + 1;
+            
+            A(row, c1+5) = 24; A(row, c1+6) = 120*T_cur;
+            A(row, c2+5) = -24; B(row, 1) = 0; row = row + 1;
+        end
+        
+        % End Point
+        T_last = segment_times(num_segments);
+        c_last = (num_segments - 1) * 6; 
+        
+        A(row, c_last+1) = 1; A(row, c_last+2) = T_last; A(row, c_last+3) = T_last^2; 
+        A(row, c_last+4) = T_last^3; A(row, c_last+5) = T_last^4; A(row, c_last+6) = T_last^5;
+        B(row, 1) = joint_wps_simscape(end, j); row = row + 1;
+        
+        A(row, c_last+2) = 1; A(row, c_last+3) = 2*T_last; A(row, c_last+4) = 3*T_last^2; 
+        A(row, c_last+5) = 4*T_last^3; A(row, c_last+6) = 5*T_last^4;
+        B(row, 1) = 0; row = row + 1;
+        
+        A(row, c_last+3) = 2; A(row, c_last+4) = 6*T_last; A(row, c_last+5) = 12*T_last^2; A(row, c_last+6) = 20*T_last^3;
+        B(row, 1) = 0;
+        
+        % Solve Matrix
+        x = A \ B;
+        for seg = 1 : num_segments
+            poly_coeffs(seg, :, j) = x( ((seg-1)*6 + 1) : (seg*6) );
+        end
+    end 
+
+    % --- 5. HIGH-RESOLUTION GLOBAL EVALUATION ---
+    global_time = linspace(0, total_time, total_time / time_resolution);
     
+    pos_eval_simscape = zeros(length(global_time), 6);
+    velocities   = zeros(length(global_time), 6);
+    accelerations = zeros(length(global_time), 6);
+    path3D_continuous = zeros(length(global_time), 3);
+    
+    cumulative_seg_time = 0;
+    current_segment = 1;
+    
+    for i = 1:length(global_time)
+        t_global = global_time(i);
+        
+        if t_global > (cumulative_seg_time + segment_times(current_segment))
+            if current_segment < num_segments
+                cumulative_seg_time = cumulative_seg_time + segment_times(current_segment);
+                current_segment = current_segment + 1;
+            else
+                t_global = total_time;
+            end
+        end
+        
+        t_local = t_global - cumulative_seg_time;
+        t_local = min(max(t_local, 0), segment_times(current_segment)); 
+
+        continuous_q_simscape_vector = zeros(1,6);
+        
+        for j = 1:6
+            coeffs = poly_coeffs(current_segment, :, j);
+            
+            % These positions are now natively in the Simscape coordinate system
+            pos_eval_simscape(i, j) = coeffs(1) + coeffs(2)*t_local + coeffs(3)*t_local^2 + ...
+                                      coeffs(4)*t_local^3 + coeffs(5)*t_local^4 + coeffs(6)*t_local^5;
+            
+            continuous_q_simscape_vector(j) = pos_eval_simscape(i, j);
+            
+            velocities(i, j)   = coeffs(2) + 2*coeffs(3)*t_local + 3*coeffs(4)*t_local^2 + ...
+                                 4*coeffs(5)*t_local^3 + 5*coeffs(6)*t_local^4;
+            
+            accelerations(i, j) = 2*coeffs(3) + 6*coeffs(4)*t_local + 12*coeffs(5)*t_local^2 + ...
+                                 20*coeffs(6)*t_local^3;
+        end
+        
+        % Extract X, Y, Z from the single 4x4 output of CalculateForwardKinematics
+        continuous_q_raw_math = continuous_q_simscape_vector + simscape_offset_vector;
+        T_matrix = CalculateForwardKinematics(d1, a2, d4, d6, continuous_q_raw_math);
+        current_XYZ = T_matrix(1:3, 4)'; 
+        
+        path3D_continuous(i, :) = current_XYZ;
+    end
+
+    % --- 6. Plotting Section ---
+    if plot_flag
+        standard_linewidth = 1.5;
+        joint_colors = ['b', 'r', 'g', 'm', 'c', 'y'];
+
+        % Figure 1: 3D Path
+        figure('Name', 'Continuous 3D Cartesian Trajectory', 'NumberTitle', 'off');
+        axis equal; hold on; grid on; grid minor; view(3);
+        plot3(points(:, 1), points(:, 2), points(:, 3), 'r*', 'MarkerSize', 8, 'DisplayName', 'Original Waypoints');
+        plot3(path3D_continuous(:, 1), path3D_continuous(:, 2), path3D_continuous(:, 3), 'LineWidth', 2, 'Color', 'b', 'DisplayName', 'Fluent Continuous Path');
+        title('Interpolated continuous 3D Path'); xlabel('X Axis'); ylabel('Y Axis'); zlabel('Z Axis'); legend('show'); hold off;
+
+        % Figure 2: Simscape Joint Displacements 
+        figure('Name', 'Native Simscape Joint Displacements', 'NumberTitle', 'off');
+        hold on; grid on; grid minor;
+        for j = 1:6
+            plot(global_time, pos_eval_simscape(:, j), 'Color', joint_colors(j), 'LineWidth', standard_linewidth, 'DisplayName', ['Joint ', num2str(j)]);
+        end
+        cumulative_times_vec = [0, cumsum(segment_times)];
+        for j = 1:6
+            plot(cumulative_times_vec, joint_wps_simscape(:, j), [joint_colors(j), 'o'], 'MarkerFaceColor', 'w', 'MarkerSize', 5, 'HandleVisibility', 'off');
+        end
+        title('Joint Displacements (0 = Simscape Home Position)');
+        xlabel('Time (s)'); ylabel('Angle (rad)'); legend('show'); hold off;
+
+        % Figure 3: Velocities
+        figure('Name', 'Joint Velocities', 'NumberTitle', 'off');
+        hold on; grid on; grid minor;
+        for j = 1:6
+            plot(global_time, velocities(:, j), 'Color', joint_colors(j), 'LineWidth', standard_linewidth);
+        end
+        title('Smooth continuous joint velocity profiles'); xlabel('Time (s)'); ylabel('Velocity (rad/s)'); hold off;
+
+        % Figure 4: Accelerations
+        figure('Name', 'Joint Accelerations', 'NumberTitle', 'off');
+        hold on; grid on; grid minor;
+        for j = 1:6
+            plot(global_time, accelerations(:, j), 'Color', joint_colors(j), 'LineWidth', standard_linewidth);
+        end
+        title('Smooth continuous joint acceleration profiles'); xlabel('Time (s)'); ylabel('Acceleration (rad/s^2)'); hold off;
+    end
 end
-
-
-
