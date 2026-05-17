@@ -27,6 +27,7 @@ d1n = 200.0;
 d4n = 1100.0 + 100.0;
 d6n = 200.0 + 200.0;
 a2n = 1300.0;
+time_res = 0.001;
 
 % Format: [X, Y, Z, Roll, Pitch, Yaw]
 p1 = [ 1600,    0,  1500,  -1.571, -1.571, -1.571]; % Start point
@@ -53,7 +54,8 @@ enable_plotting = true;
 
 % 3. Execute the Trajectory Solver
 disp('Calculating trajectory...');
-[poly_coeffs, segment_times, calculated_joints] = TrajectorySolver(...
+[poly_coeffs, segment_times, joint_wps_simscape, global_time, pos_eval_simscape, velocities, accelerations] = TrajectorySolver(...
+    time_res,...
     path_points, ...
     ik_config, ...
     max_joint_velocity, ...
@@ -68,3 +70,15 @@ disp('Calculating trajectory...');
 disp('Trajectory calculation complete!');
 disp('Total movement time (seconds):');
 disp(sum(segment_times));
+
+t_col = global_time'; % Transpose global_time from a row to a column vector
+
+% Package [Time, Position, Velocity, Acceleration] for each specific joint
+sim_input_J1 = [t_col, pos_eval_simscape(:,1), velocities(:,1), accelerations(:,1)];
+sim_input_J2 = [t_col, pos_eval_simscape(:,2), velocities(:,2), accelerations(:,2)];
+sim_input_J3 = [t_col, pos_eval_simscape(:,3), velocities(:,3), accelerations(:,3)];
+sim_input_J4 = [t_col, pos_eval_simscape(:,4), velocities(:,4), accelerations(:,4)];
+sim_input_J5 = [t_col, pos_eval_simscape(:,5), velocities(:,5), accelerations(:,5)];
+sim_input_J6 = [t_col, pos_eval_simscape(:,6), velocities(:,6), accelerations(:,6)];
+
+disp('Simulink data packaged successfully!');

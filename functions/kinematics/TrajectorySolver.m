@@ -1,12 +1,11 @@
-function [poly_coeffs, segment_times, joint_wps_simscape, global_time, pos_eval_simscape, velocities, accelerations] = TrajectorySolver(points, config, max_vel, max_accel, plot_flag, d1, a2, d4, d6)
+function [poly_coeffs, segment_times, joint_wps_simscape, global_time, pos_eval_simscape, velocities, accelerations] = TrajectorySolver(time_res, points, config, max_vel, max_accel, plot_flag, d1, a2, d4, d6)
 % TrajectorySolver: Optimized quintic polynomial path planner mapped to Simscape 0-state.
 
     % --- CORE SETTINGS ---
-    time_resolution = 0.02; % Global evaluation fine time step (seconds) for plots
+    time_resolution = time_res; % Global evaluation fine time step (seconds) for plots
 
     % --- 1. Map Mathematics to Simscape Zero-State ---
     % We assume the first waypoint (points(1,:)) is the robot's home position.
-    % We calculate its absolute mathematical angles to use as a subtraction offset.
     home_pt = points(1, :);
     home_rot_mat = eul2rotm(home_pt(4:6));
     home_ht = eye(4); 
@@ -15,15 +14,23 @@ function [poly_coeffs, segment_times, joint_wps_simscape, global_time, pos_eval_
     
     all_home_configs = CalculateInverseKinematics(d1, a2, d4, d6, home_ht);
     
-    % Safe config selection
+    % Safe config selection for Home Point
     num_sol_start = size(all_home_configs, 1);
     if num_sol_start == 0
         error('Workspace Error: The starting Home position is outside the reachable workspace.');
     end
-    config_to_use = min(config, num_sol_start);
     
-    % This is the constant difference between the Math frame and the Simscape frame
-    simscape_offset_vector = all_home_configs(config_to_use, :);
+    % Dynamic configuration check for the start point
+    if config <= num_sol_start
+        actual_home_config = config;
+    else
+        actual_home_config = 1;
+        fprintf('WARNING: Home point not reachable in config %d. Falling back to config 1.\n', config);
+    end
+    
+    % Assuming your Simscape and Math models are aligned perfectly, the offset is zero.
+    % If you need the offset back, change this to: simscape_offset_vector = all_home_configs(actual_home_config, :);
+    simscape_offset_vector = zeros(1, 6); 
 
     % --- 2. Calculate Mapped Inverse Kinematics ---
     num_points = size(points, 1);
@@ -37,12 +44,22 @@ function [poly_coeffs, segment_times, joint_wps_simscape, global_time, pos_eval_
         ht_matrix(1:3, 4) = transpose(current_point(1:3));
         
         all_configs = CalculateInverseKinematics(d1, a2, d4, d6, ht_matrix); 
+        num_sols = size(all_configs, 1);
         
-        if size(all_configs, 1) == 0
-            error('Workspace Error: Waypoint %d is unreachable.', i);
+        % Hard error: Point is physically unreachable in any configuration
+        if num_sols == 0
+            error('Workspace Error: Waypoint %d is unreachable in ALL configurations.', i);
         end
         
-        q_target_raw = all_configs(config_to_use, :);
+        % Dynamic Fallback Logic: Try requested config, otherwise pick the first available
+        if config <= num_sols
+            actual_config = config;
+        else
+            actual_config = 1;
+            fprintf('WARNING: Waypoint %d is not reachable in requested config %d. Falling back to config 1.\n', i, config);
+        end
+        
+        q_target_raw = all_configs(actual_config, :);
         
         % Map the raw math angle to the Simscape 0-based angle
         joint_wps_simscape(i, :) = q_target_raw - simscape_offset_vector; 
@@ -149,7 +166,6 @@ function [poly_coeffs, segment_times, joint_wps_simscape, global_time, pos_eval_
         
         t_local = t_global - cumulative_seg_time;
         t_local = min(max(t_local, 0), segment_times(current_segment)); 
-
         continuous_q_simscape_vector = zeros(1,6);
         
         for j = 1:6
@@ -180,14 +196,14 @@ function [poly_coeffs, segment_times, joint_wps_simscape, global_time, pos_eval_
     if plot_flag
         standard_linewidth = 1.5;
         joint_colors = ['b', 'r', 'g', 'm', 'c', 'y'];
-
+        
         % Figure 1: 3D Path
         figure('Name', 'Continuous 3D Cartesian Trajectory', 'NumberTitle', 'off');
         axis equal; hold on; grid on; grid minor; view(3);
         plot3(points(:, 1), points(:, 2), points(:, 3), 'r*', 'MarkerSize', 8, 'DisplayName', 'Original Waypoints');
         plot3(path3D_continuous(:, 1), path3D_continuous(:, 2), path3D_continuous(:, 3), 'LineWidth', 2, 'Color', 'b', 'DisplayName', 'Fluent Continuous Path');
         title('Interpolated continuous 3D Path'); xlabel('X Axis'); ylabel('Y Axis'); zlabel('Z Axis'); legend('show'); hold off;
-
+        
         % Figure 2: Simscape Joint Displacements 
         figure('Name', 'Native Simscape Joint Displacements', 'NumberTitle', 'off');
         hold on; grid on; grid minor;
@@ -200,21 +216,21 @@ function [poly_coeffs, segment_times, joint_wps_simscape, global_time, pos_eval_
         end
         title('Joint Displacements (0 = Simscape Home Position)');
         xlabel('Time (s)'); ylabel('Angle (rad)'); legend('show'); hold off;
-
+        
         % Figure 3: Velocities
         figure('Name', 'Joint Velocities', 'NumberTitle', 'off');
         hold on; grid on; grid minor;
         for j = 1:6
-            plot(global_time, velocities(:, j), 'Color', joint_colors(j), 'LineWidth', standard_linewidth);
+            plot(global_time, velocities(:, j), 'Color', joint_colors(j), 'LineWidth', standard_linewidth, 'DisplayName', ['Joint ', num2str(j)]);
         end
-        title('Smooth continuous joint velocity profiles'); xlabel('Time (s)'); ylabel('Velocity (rad/s)'); hold off;
-
+        title('Smooth continuous joint velocity profiles'); xlabel('Time (s)'); ylabel('Velocity (rad/s)');legend('show'); hold off;
+        
         % Figure 4: Accelerations
         figure('Name', 'Joint Accelerations', 'NumberTitle', 'off');
         hold on; grid on; grid minor;
         for j = 1:6
-            plot(global_time, accelerations(:, j), 'Color', joint_colors(j), 'LineWidth', standard_linewidth);
+            plot(global_time, accelerations(:, j), 'Color', joint_colors(j), 'LineWidth', standard_linewidth, 'DisplayName', ['Joint ', num2str(j)]);
         end
-        title('Smooth continuous joint acceleration profiles'); xlabel('Time (s)'); ylabel('Acceleration (rad/s^2)'); hold off;
+        title('Smooth continuous joint acceleration profiles'); xlabel('Time (s)'); ylabel('Acceleration (rad/s^2)');legend('show'); hold off;
     end
 end
