@@ -27,12 +27,12 @@ p7 = [p5(1), p5(2) + dist_retract*cos(pi/4), p5(3) + dist_retract*sin(pi/4), p5(
 ik_config = 1; 
 
 % Joint Space Limits (Sweeping moves)
-max_joint_velocity = pi;       % Maximum velocity in rad/s
-max_joint_acceleration = pi/2; % Maximum acceleration in rad/s^2
+max_joint_velocity = 3*pi;       % Maximum velocity in rad/s
+max_joint_acceleration = 2*pi; % Maximum acceleration in rad/s^2
 
 % Cartesian Space Limits (Straight-line approaches)
-max_linear_velocity = 250.0;      % Maximum velocity in mm/s
-max_linear_acceleration = 500.0;  % Maximum acceleration in mm/s^2
+max_linear_velocity = 500;      % Maximum velocity in mm/s
+max_linear_acceleration = 2000;  % Maximum acceleration in mm/s^2
 
 enable_plotting = false; % Turn off internal solver plots to avoid clutter
 
