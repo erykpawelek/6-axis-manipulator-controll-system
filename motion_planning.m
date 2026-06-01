@@ -8,7 +8,7 @@ d1n = 200.0;
 d4n = 1100.0 + 100.0;
 d6n = 200.0 + 200.0;
 a2n = 1300.0;
-time_res = 0.001;
+time_res = 0.0001;
 
 % 2. Waypoint Definitions [X, Y, Z, Roll, Pitch, Yaw]
 p1 = [  1600, 0, 1500, -pi/2, -pi/2, -pi/2]; % Home Start
@@ -27,12 +27,12 @@ p7 = [p5(1), p5(2) + dist_retract*cos(pi/4), p5(3) + dist_retract*sin(pi/4), p5(
 ik_config = 1; 
 
 % Joint Space Limits (Sweeping moves)
-max_joint_velocity = 1.5*pi;       % Maximum velocity in rad/s
-max_joint_acceleration = pi; % Maximum acceleration in rad/s^2
+max_joint_velocity = pi;       % Maximum velocity in rad/s
+max_joint_acceleration = 0.15*pi; % Maximum acceleration in rad/s^2
 
 % Cartesian Space Limits (Straight-line approaches)
-max_linear_velocity = 200;      % Maximum velocity in mm/s
-max_linear_acceleration = 200;  % Maximum acceleration in mm/s^2
+max_linear_velocity = 100;      % Maximum velocity in mm/s
+max_linear_acceleration = 1008;  % Maximum acceleration in mm/s^2
 
 enable_plotting = false; % Turn off internal solver plots to avoid clutter
 
@@ -122,10 +122,8 @@ legend('show');
 hold off;
 
 % Create Figure 2: Master Joint Kinematics Window
-figure('Name', 'Master Joint Kinematics', 'NumberTitle', 'off');
+figure;
 
-% Plot 1: Joint Displacements
-subplot(3, 1, 1);
 hold on; grid on; grid minor;
 for j = 1:6
     plot(master_time, master_pos(:, j), 'Color', joint_colors(j), 'LineWidth', standard_linewidth, 'DisplayName', ['Joint ', num2str(j)]);
@@ -136,7 +134,7 @@ legend('show', 'Location', 'eastoutside');
 hold off;
 
 % Plot 2: Joint Velocities
-subplot(3, 1, 2);
+figure;
 hold on; grid on; grid minor;
 for j = 1:6
     plot(master_time, master_vel(:, j), 'Color', joint_colors(j), 'LineWidth', standard_linewidth, 'DisplayName', ['Joint ', num2str(j)]);
@@ -146,7 +144,7 @@ title('Joint Velocities');
 hold off;
 
 % Plot 3: Joint Accelerations
-subplot(3, 1, 3);
+figure;
 hold on; grid on; grid minor;
 for j = 1:6
     plot(master_time, master_acc(:, j), 'Color', joint_colors(j), 'LineWidth', standard_linewidth, 'DisplayName', ['Joint ', num2str(j)]);
