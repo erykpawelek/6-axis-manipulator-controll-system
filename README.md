@@ -153,7 +153,7 @@ Tracking evaluation revealed high precision in the joint space (maximum deviatio
 
 - X-axis error: Peaked at $\pm44~mm$ during high-speed sweeps.
 - Y-axis error: Peaked at $89~mm$ during major joint-space transitions.
-- Z-axis error: Oscillated between $5~mm$ and $30~mm$ during motion.
+- Z-axis error: Oscillated between $5mm$ and $30mm$ during motion.
 
 Analysis indicated that static residual errors at the proximal joints are heavily influenced by the sampling time ($0.001s$), which limits the aggressiveness of the derivative gain before inducing system instability (derivative kick).
 
