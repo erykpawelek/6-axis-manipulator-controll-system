@@ -1,6 +1,6 @@
 # Robot for Car Windshield Assembly
 
-![Visualization](./images/Gemini_Generated_Image_eybju1eybju1eybj.png)
+![Visualization](./images/Gemini_Generated_Image_ofzdyjofzdyjofzd.png)
 
 **Authors:** Eryk Pawełek, Dawid Pietrzyk, Nikodem Weltrowski, Maksymilian Wywiał
 
