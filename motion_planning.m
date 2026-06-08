@@ -32,7 +32,7 @@ max_joint_acceleration = 0.15*pi; % Maximum acceleration in rad/s^2
 
 % Cartesian Space Limits (Straight-line approaches)
 max_linear_velocity = 100;      % Maximum velocity in mm/s
-max_linear_acceleration = 1008;  % Maximum acceleration in mm/s^2
+max_linear_acceleration = 100;  % Maximum acceleration in mm/s^2
 
 enable_plotting = false; % Turn off internal solver plots to avoid clutter
 
