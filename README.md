@@ -14,7 +14,7 @@ A fully articulated structure utilizing 6 rotational joints driven by AC servomo
 
 To ensure safe handling of fragile laminated glass and high positioning accuracy, the motion parameters were bounded below the absolute maximum capabilities of standard industrial robots. The operation is divided into two distinct phases:
 
-- **Transfer Phase:** Fast transit from the picking station to the vehicle workspace. Maximum Tool Center Point (TCP) velocity is set to $1.0~m/s$ with an acceleration of $2.0~m/s^{2}$.
+- **Transfer Phase:** Fast transit from the picking station to the vehicle workspace. Maximum Tool Center Point (TCP) velocity is set to $1.0m/s$ with an acceleration of $2.0m/s^{2}$.
 - **Mounting Phase:** Precision alignment and insertion. Maximum TCP velocity is reduced to $0.25m/s$ with an acceleration of $0.5m/s^{2}$
 
 ## Kinematic Analysis
