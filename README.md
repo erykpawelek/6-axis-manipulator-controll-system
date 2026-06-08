@@ -15,7 +15,7 @@ A fully articulated structure utilizing 6 rotational joints driven by AC servomo
 To ensure safe handling of fragile laminated glass and high positioning accuracy, the motion parameters were bounded below the absolute maximum capabilities of standard industrial robots. The operation is divided into two distinct phases:
 
 - **Transfer Phase:** Fast transit from the picking station to the vehicle workspace. Maximum Tool Center Point (TCP) velocity is set to $1.0~m/s$ with an acceleration of $2.0~m/s^{2}$.
-- **Mounting Phase:** Precision alignment and insertion. Maximum TCP velocity is reduced to $0.25~m/s$ with an acceleration of $0.5~m/s^{2}$
+- **Mounting Phase:** Precision alignment and insertion. Maximum TCP velocity is reduced to $0.25m/s$ with an acceleration of $0.5m/s^{2}$
 
 ## Kinematic Analysis
 
@@ -32,7 +32,7 @@ The spatial geometry of the manipulator is defined using the standard Denavit-Ha
 |  5  |        $\theta_{5}$        |   $0$   |   $0$   | $-\frac{\pi}{2}$ |       $\pm90^{\circ}$        |
 |  6  |        $\theta_{6}$        | $d_{6}$ |   $0$   |       $0$        |       $\pm180^{\circ}$       |
 
-> (Note: $d_{1}=200~mm$, $a_{2}=1300~mm$, $d_{4}=1200~mm$, $d_{6}=400~mm$)
+> (Note: $d_{1}=200mm$, $a_{2}=1300mm$, $d_{4}=1200mm$, $d_{6}=400mm$)
 
 ![Kinematic structure](./images/Kinamatic%20structure.png)
 
@@ -147,15 +147,15 @@ A 5th-order polynomial interpolation was applied for joint space trajectories to
 
 ## PID Control and Error Evaluation
 
-Independent PID controllers were tuned for each joint using a decoupled approach, targeting a settling time of $<0.5~s$ and overshoot of $<10\%$.
+Independent PID controllers were tuned for each joint using a decoupled approach, targeting a settling time of $<0.5s$ and overshoot of $<10\%$.
 
-Tracking evaluation revealed high precision in the joint space (maximum deviations of $\pm0.035~rad$ on Joint 1). However, error amplification through the extended kinematic chain (up to $1300~mm$ link lengths) resulted in measurable Cartesian deviations at the end-effector.
+Tracking evaluation revealed high precision in the joint space (maximum deviations of $\pm0.035rad$ on Joint 1). However, error amplification through the extended kinematic chain (up to $1300mm$ link lengths) resulted in measurable Cartesian deviations at the end-effector.
 
 - X-axis error: Peaked at $\pm44~mm$ during high-speed sweeps.
 - Y-axis error: Peaked at $89~mm$ during major joint-space transitions.
 - Z-axis error: Oscillated between $5~mm$ and $30~mm$ during motion.
 
-Analysis indicated that static residual errors at the proximal joints are heavily influenced by the sampling time ($0.001~s$), which limits the aggressiveness of the derivative gain before inducing system instability (derivative kick).
+Analysis indicated that static residual errors at the proximal joints are heavily influenced by the sampling time ($0.001s$), which limits the aggressiveness of the derivative gain before inducing system instability (derivative kick).
 
 ## Assembly drawing
 
